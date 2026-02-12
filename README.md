@@ -99,3 +99,19 @@ Execution Time: 1.166 ms
 - **Correcciones**:
     - Se implementó `force-dynamic` en las rutas de reportes para evitar que Next.js intente conectar a la base de datos durante el tiempo de construcción de la imagen Docker.
 
+## Evidencia de DB: Comando `\dv` (lista de views)
+
+```text
+tienda=# \dv
+                   List of relations
+ Schema |              Name              | Type | Owner
+--------+--------------------------------+------+-------
+ public | vw_clasificacion_clientes      | view | admin
+ public | vw_clientes_top                | view | admin
+ public | vw_ordenes_por_status          | view | admin
+ public | vw_productos_mas_vendidos      | view | admin
+ public | vw_ranking_productos_categoria | view | admin
+ public | vw_ventas_por_categoria        | view | admin
+(6 rows)
+```
+
