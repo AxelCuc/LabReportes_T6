@@ -90,7 +90,6 @@ Execution Time: 1.166 ms
 ## Bitácora de IA
 
 - **Prompts Clave**:
-    - "Genera 5 vistas complejas en SQL para reportes de una tienda, incluyendo window functions y agregaciones."
     - "Configura un healthcheck en docker-compose para postgresql."
     - "Error getaddrinfo EAI_AGAIN db en Next.js Docker build."
 - **Validaciones**:
