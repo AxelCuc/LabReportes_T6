@@ -41,13 +41,61 @@ El proyecto está configurado para levantarse completamente con un solo comando 
     -   Vista: `vw_clasificacion_clientes`
     -   Características: **Paginación (Server-Side)**, Badges de estado.
 
-## Detalles Técnicos y Seguridad
+## Detalles Técnicos y Requisitos Extra
 
--   **Framework**: Next.js 15 (App Router).
--   **Estilos**: Tailwind CSS con diseño "Premium" (Inter font, gradients, cards).
--   **BD Client**: `pg` (node-postgres) con patrón Singleton.
--   **Seguridad**:
-    -   Consultas parametrizadas (`$1`, `$2`) para prevenir SQL Injection.
-    -   Validación de inputs con `zod`.
-    -   Credenciales de BD seguras en docker-compose (environment variables).
-    -   Uso exclusivo de Server Components para data fetching (sin exposición de API keys).
+- **Healthcheck en DB**: Agregado en `docker-compose.yml` usando `pg_isready`.
+- **Dependencia Web**: El servicio `web` ahora depende de que `postgres` esté en estado `healthy`.
+- **Configuración**: Se incluyó `.env.example` para la configuración de variables de entorno.
+- **Framework**: Next.js 15 (App Router).
+- **Estilos**: Tailwind CSS con diseño "Premium".
+
+## Trade-offs (SQL vs Next.js)
+
+- **Cálculos en SQL**: Se decidió realizar todas las agregaciones (`SUM`, `COUNT`), agrupaciones (`GROUP BY`), filtrados (`HAVING`) y funciones de ventana (`ROW_NUMBER`) directamente en las Views de PostgreSQL. 
+    - *Razón*: Esto aprovecha el motor de optimización de la base de datos y reduce significativamente la cantidad de datos transferidos a la aplicación Next.js.
+- **Formateo en Next.js**: El formateo de moneda (`Intl.NumberFormat`), porcentajes y la lógica de visualización de KPIs se realiza en el servidor de Next.js.
+    - *Razón*: Mantiene la separación de preocupaciones, permitiendo que la base de datos entregue datos procesados y la aplicación gestione la presentación.
+
+## Performance Evidence
+
+Se ejecutaron análisis de rendimiento en las vistas principales:
+
+### 1. Vista: `vw_ventas_por_categoria`
+```text
+HashAggregate  (cost=38.48..40.48 rows=200 width=72) (actual time=0.082..0.085 rows=3 loops=1)
+  Group Key: c.id, c.nombre
+  ->  Hash Join  (cost=24.58..36.98 rows=200 width=44) (actual time=0.065..0.072 rows=10 loops=1)
+        Hash Cond: (p.categoria_id = c.id)
+Planning Time: 6.000 ms
+Execution Time: 0.434 ms
+```
+*Explicación*: El uso de `Hash Join` permite procesar las tablas de categorías y productos de manera eficiente, resultando en un tiempo de ejecución menor a 1ms.
+
+### 2. Vista: `vw_ranking_productos_categoria`
+```text
+WindowAgg  (cost=71.86..75.86 rows=200 width=80) (actual time=0.150..0.165 rows=10 loops=1)
+  ->  Sort  (cost=71.86..72.36 rows=200 width=48) (actual time=0.145..0.148 rows=10 loops=1)
+Planning Time: 6.125 ms
+Execution Time: 1.166 ms
+```
+*Explicación*: La función de ventana (`ROW_NUMBER`) se ejecuta eficientemente tras un ordenamiento previo, permitiendo obtener el ranking de productos en aprox. 1.1ms.
+
+## Threat Model
+
+- **SQL Injection**: Prevenido mediante el uso estricto de **Views** y **Queries Parametrizadas** en la capa de datos.
+- **Mínimo Privilegio**: Se implementó un rol `app_user` en `05_roles.sql` que **solo** tiene permisos de `SELECT` sobre las vistas de reportes, restringiendo el acceso directo a las tablas base.
+- **Gestión de Secretos**: Uso de variables de entorno (`.env`) para manejar la conexión, aislándola del código fuente y proporcionando un `.env.example`.
+- **Validación**: Todas las entradas de usuario (filtros, paginación) son validadas con `Zod`.
+
+## Bitácora de IA
+
+- **Prompts Clave**:
+    - "Genera 5 vistas complejas en SQL para reportes de una tienda, incluyendo window functions y agregaciones."
+    - "Configura un healthcheck en docker-compose para postgresql."
+    - "Error getaddrinfo EAI_AGAIN db en Next.js Docker build."
+- **Validaciones**:
+    - Se verificó que cada vista devuelva el grano correcto.
+    - Se validó el estado `healthy` del contenedor con `docker ps`.
+- **Correcciones**:
+    - Se implementó `force-dynamic` en las rutas de reportes para evitar que Next.js intente conectar a la base de datos durante el tiempo de construcción de la imagen Docker.
+
